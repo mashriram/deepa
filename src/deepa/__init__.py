@@ -11,6 +11,6 @@ from .model import Block, DeepaCache, DeepaLM
 from .ops.delta_rule import fla_available, gated_delta_rule
 from .tokenizer import ByteTokenizer
 
-__version__ = "0.1.0"
+__version__ = "2026.11.23"
 __all__ = ["DeepaConfig", "DeepaLM", "DeepaCache", "Block", "SheafDeltaMixer", "Attention", "ByteTokenizer",
            "gated_delta_rule", "fla_available", "spread_pattern", "__version__"]

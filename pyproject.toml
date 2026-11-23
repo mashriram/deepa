@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "deepa-lm"
-version = "0.1.0"
+version = "2026.11.23"
 description = "DEEPA: hybrid gated-delta-rule / ALiBi-attention language models with constant-size recurrent state"
 readme = "README.md"
 requires-python = ">=3.10"
