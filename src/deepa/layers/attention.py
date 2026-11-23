@@ -72,20 +72,28 @@ def rope(x: torch.Tensor, pos: torch.Tensor, base: float = 10000.0) -> torch.Ten
 class Attention(nn.Module):
     def __init__(self, cfg: DeepaConfig):
         super().__init__()
-        self.h, self.position, self.rope_base = cfg.attn_heads, cfg.position, cfg.rope_base
-        self.qkv = nn.Linear(cfg.dim, 3 * cfg.dim, bias=False)
+        self.h, self.kv, self.position, self.rope_base = cfg.attn_heads, cfg.kv_heads, cfg.position, cfg.rope_base
+        self.dh = cfg.dim // cfg.attn_heads
+        # q | k | v packed in one projection; with kv == h this is exactly the paper layout (3 * dim outputs)
+        self.qkv = nn.Linear(cfg.dim, cfg.dim + 2 * self.kv * self.dh, bias=False)
         self.o = nn.Linear(cfg.dim, cfg.dim, bias=False)
         self.alibi_impl = "auto"  # auto | folded | dense
 
     def forward(self, x: torch.Tensor, cache: Optional[KV] = None, return_state: bool = False):
         B, T, D = x.shape
-        q, k, v = self.qkv(x).view(B, T, 3, self.h, D // self.h).permute(2, 0, 3, 1, 4)
+        q, k, v = self.qkv(x).split([D, self.kv * self.dh, self.kv * self.dh], -1)
+        q = q.view(B, T, self.h, self.dh).transpose(1, 2)
+        k = k.view(B, T, self.kv, self.dh).transpose(1, 2)
+        v = v.view(B, T, self.kv, self.dh).transpose(1, 2)
         past = 0 if cache is None else cache[0].shape[2]
         if self.position == "rope":
             pos = torch.arange(past, past + T, device=x.device)
             q, k = rope(q, pos, self.rope_base), rope(k, pos, self.rope_base)
         if cache is not None:
             k, v = torch.cat([cache[0], k], 2), torch.cat([cache[1], v], 2)
+        new_cache = (k, v)                                   # cache keeps only the kv heads (GQA memory saving)
+        if self.kv != self.h:
+            k, v = k.repeat_interleave(self.h // self.kv, 1), v.repeat_interleave(self.h // self.kv, 1)
         if self.position == "alibi":
             folded = self.alibi_impl == "folded" or (self.alibi_impl == "auto" and past == 0 and x.is_cuda
                                                       and q.dtype in (torch.float16, torch.bfloat16))
@@ -97,7 +105,7 @@ class Attention(nn.Module):
                 mask = torch.ones(T, k.shape[2], dtype=torch.bool, device=x.device).tril(past)
                 y = F.scaled_dot_product_attention(q, k, v, attn_mask=mask)
         out = self.o(y.transpose(1, 2).reshape(B, T, D))
-        return (out, (k, v)) if return_state else out
+        return (out, new_cache) if return_state else out
 
 
 __all__ = ["Attention", "alibi_slopes", "alibi_attention_folded", "alibi_attention_dense", "rope"]

@@ -55,7 +55,26 @@ class DeepaHFConfig(PretrainedConfig):
 
     @classmethod
     def from_preset(cls, preset: str = "deepa_alibi", **kw) -> "DeepaHFConfig":
+        """Paper presets: deepa_alibi | deepa_rope | sheafdelta."""
         return cls(**getattr(DeepaConfig, preset)(**kw).to_dict())
+
+    @classmethod
+    def from_params(cls, target, **kw) -> "DeepaHFConfig":
+        """Any size: DeepaHFConfig.from_params("2B", vocab_size=len(tokenizer))."""
+        return cls(**DeepaConfig.from_params(target, **kw).to_dict())
+
+    @classmethod
+    def build(cls, dim: int, n_layers: int, **kw) -> "DeepaHFConfig":
+        """Explicit shape with the large-model recipe: DeepaHFConfig.build(dim=4096, n_layers=32)."""
+        return cls(**DeepaConfig.build(dim, n_layers, **kw).to_dict())
+
+    @property
+    def num_attention_heads(self) -> int:
+        return self.attn_heads
+
+    @property
+    def num_key_value_heads(self) -> int:
+        return self.n_kv_heads or self.attn_heads
 
 
 class DeepaForCausalLM(PreTrainedModel, GenerationMixin):

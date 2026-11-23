@@ -41,13 +41,25 @@ class DeepaSequenceModel(ModelMixin, ConfigMixin):
 
     @register_to_config
     def __init__(self, vocab_size: int = 256, dim: int = 384, n_layers: int = 8, pattern: str = "dddaddda",
-                 attn_heads: int = 8, mixer_heads: int = 6, position: str = "alibi", beta_max: float = 2.0,
-                 mlp_mult_mixer: float = 3.65, mlp_mult_attn: float = 3.65, max_position_embeddings: int = 1024):
+                 attn_heads: int = 8, n_kv_heads: Optional[int] = None, mixer_heads: int = 6, position: str = "alibi",
+                 beta_max: float = 2.0, mlp_mult_mixer: float = 3.65, attn_mlp: str = "gelu", mlp_mult_attn: float = 3.65,
+                 mlp_hidden_mixer: Optional[int] = None, mlp_hidden_attn: Optional[int] = None,
+                 scaled_init: bool = False, tie_embeddings: bool = True, max_position_embeddings: int = 1024):
         super().__init__()
-        self.model = DeepaLM(DeepaConfig(vocab_size=vocab_size, dim=dim, n_layers=n_layers, pattern=pattern,
-                                         attn_heads=attn_heads, mixer_heads=mixer_heads, position=position,
-                                         beta_max=beta_max, mlp_mult_mixer=mlp_mult_mixer, mlp_mult_attn=mlp_mult_attn,
-                                         max_position_embeddings=max_position_embeddings))
+        self.model = DeepaLM(DeepaConfig(
+            vocab_size=vocab_size, dim=dim, n_layers=n_layers, pattern=pattern, attn_heads=attn_heads,
+            n_kv_heads=n_kv_heads, mixer_heads=mixer_heads, position=position, beta_max=beta_max,
+            mlp_mult_mixer=mlp_mult_mixer, attn_mlp=attn_mlp, mlp_mult_attn=mlp_mult_attn,
+            mlp_hidden_mixer=mlp_hidden_mixer, mlp_hidden_attn=mlp_hidden_attn, scaled_init=scaled_init,
+            tie_embeddings=tie_embeddings, max_position_embeddings=max_position_embeddings))
+
+    @classmethod
+    def from_deepa_config(cls, cfg: DeepaConfig) -> "DeepaSequenceModel":
+        """Any DeepaConfig, e.g. DeepaSequenceModel.from_deepa_config(DeepaConfig.from_params("1B"))."""
+        keys = ("vocab_size", "dim", "n_layers", "pattern", "attn_heads", "n_kv_heads", "mixer_heads", "position",
+                "beta_max", "mlp_mult_mixer", "attn_mlp", "mlp_mult_attn", "mlp_hidden_mixer", "mlp_hidden_attn",
+                "scaled_init", "tie_embeddings", "max_position_embeddings")
+        return cls(**{k: getattr(cfg, k) for k in keys})
 
     def forward(self, input_ids: torch.LongTensor, return_logits: bool = False, return_dict: bool = True):
         h = self.model(input_ids, return_hidden=True)

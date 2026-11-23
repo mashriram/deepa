@@ -108,12 +108,70 @@ y, state = mixer(x, return_state=True)                   # prefill and keep the 
 y_t, state = mixer.step(x_t, state)                      # O(1) per token afterwards
 ```
 
-### Sizes from the paper's scaling study
+## Build any size: from 10M to 200B
+
+Defining a DEEPA model of any size works like defining a Transformer: pick a size, or set the shape yourself.
 
 ```python
-DeepaConfig.from_size("38m")                  # 2m, 6m, 14m, 38m (ALiBi hybrid)
-DeepaConfig.from_size("14m", kind="sheafdelta")
+from deepa import DeepaConfig, DeepaLM
+
+# 1) By size: depth and width are solved for you
+cfg = DeepaConfig.from_params("2B", vocab_size=32000)       # "125m", "350m", "1b", "7b", "70b", "200b", 3e9 ...
+print(cfg.summary())
+# DEEPA 2.01B params | dim 2048 x 36 layers | pattern ddda... (9 attention, 27 Sheaf-Delta) | attn heads 16 (kv 4) ...
+
+# 2) By shape, the same way you would define a Llama-style Transformer
+cfg = DeepaConfig.build(dim=4096, n_layers=32, vocab_size=128256)               # ~7.7B (large vocab)
+cfg = DeepaConfig.build(dim=8192, n_layers=80, attn_every=8, gqa_groups=8)      # 70B-class, 7:1 Sheaf-Delta:attention
+cfg = DeepaConfig.build(dim=2048, n_layers=24, attn_layers=[5, 11, 17, 23])     # attention exactly where you want it
+cfg = DeepaConfig.build(dim=2048, n_layers=24, attn_every=0)                    # pure Sheaf-Delta, no KV cache at all
+
+# 3) Every field by hand
+cfg = DeepaConfig(vocab_size=50257, dim=1536, n_layers=24, pattern="ddda" * 6, attn_heads=12, n_kv_heads=4,
+                  mixer_heads=12, attn_mlp="swiglu", mlp_hidden_mixer=4096, mlp_hidden_attn=4096, position="rope")
+
+model = DeepaLM(cfg)
 ```
+
+What `build()` / `from_params()` set up by default (the usual large-model recipe; any of it can be overridden by keyword):
+
+| Knob | Default | Meaning |
+|---|---|---|
+| `attn_every` | 4 | one attention layer per 4 (the paper's 3:1). Use 8 for 7:1, 0 for none, or `attn_layers=[...]` |
+| `head_dim` / `mixer_head_dim` | 128 / 128 | per-head width of attention and of the Sheaf-Delta memory (state per layer = heads × 128 × 128) |
+| `gqa_groups` | 4 | grouped-query attention: 4 query heads share one key/value head, so the KV cache is 4× smaller again |
+| MLPs | SwiGLU, 8/3 × dim, in every block | `mlp_hidden_mixer=` / `mlp_hidden_attn=` set exact widths |
+| `position` | `"alibi"` | `"rope"` is also available |
+| init | scaled residual init | stable for deep stacks |
+| embeddings | tied for small models, untied for large vocab/dim | `tie_embeddings=` to force |
+
+**Plan before you allocate.** These run instantly, even for 200B configs:
+
+```python
+cfg.num_parameters()                       # exact count, without building the model
+cfg.estimate_memory(seq_len=32768, batch=8)
+# {'params_billion': 6.9, 'weights_gb': 12.9, 'decode_state_gb': 8.2,
+#  'transformer_kv_cache_gb_same_shape': 32.0, 'train_state_gb_adamw': 103.2}
+```
+
+**Building very large models.** You can construct a model without allocating its weights, then materialise or shard
+it with your usual stack (FSDP, DeepSpeed, accelerate):
+
+```python
+with torch.device("meta"):
+    model = DeepaLM(DeepaConfig.from_params("200B"))      # no memory used
+```
+
+The blocks are plain `nn.Module`s (`model.blocks[i]`, class `deepa.Block`), so FSDP auto-wrap, activation
+checkpointing (`model.gradient_checkpointing = True`) and `torch.compile` work as for any Transformer. Use any
+tokenizer: set `vocab_size` to its size and feed its ids. The byte tokenizer is only the default.
+
+Sizes from the paper's own scaling study are kept exactly: `DeepaConfig.from_size("2m" | "6m" | "14m" | "38m")`.
+
+> **Honest scope.** The DEEPA architecture has been *measured* only up to 38M parameters (see the paper). The library
+> builds, trains and generates at any size, and a 345M model trains correctly on an 8 GB GPU. Whether the quality
+> and efficiency advantages hold at billions of parameters has not been tested yet; treat large configs as a
+> starting point for your own experiments, not as validated models.
 
 ## Hugging Face transformers
 

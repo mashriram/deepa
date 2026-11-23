@@ -17,12 +17,13 @@ class RMSNorm(nn.Module):
 
 
 class MLP(nn.Module):
-    """``gated=True``: SwiGLU (hidden = int(dim * mult * 2/3)); ``gated=False``: GELU (hidden = int(dim * mult))."""
+    """``gated=True``: SwiGLU (hidden = int(dim * mult * 2/3)); ``gated=False``: GELU (hidden = int(dim * mult)).
+    ``hidden`` overrides the multiplier with an exact width."""
 
-    def __init__(self, dim: int, mult: float, gated: bool):
+    def __init__(self, dim: int, mult: float, gated: bool, hidden: int = None):
         super().__init__()
         self.gated = gated
-        hidden = int(dim * mult * (2 / 3 if gated else 1))
+        hidden = hidden or int(dim * mult * (2 / 3 if gated else 1))
         self.up = nn.Linear(dim, hidden * (2 if gated else 1), bias=False)
         self.down = nn.Linear(hidden, dim, bias=False)
 

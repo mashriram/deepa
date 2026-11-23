@@ -26,10 +26,10 @@ class Block(nn.Module):
         self.n1, self.n2 = RMSNorm(cfg.dim, cfg.norm_eps), RMSNorm(cfg.dim, cfg.norm_eps)
         if kind == "d":
             self.mix = SheafDeltaMixer(cfg)
-            self.mlp = MLP(cfg.dim, cfg.mlp_mult_mixer, gated=True)
+            self.mlp = MLP(cfg.dim, cfg.mlp_mult_mixer, gated=True, hidden=cfg.mlp_hidden("d"))
         else:
             self.mix = Attention(cfg)
-            self.mlp = MLP(cfg.dim, cfg.mlp_mult_attn, gated=False)
+            self.mlp = MLP(cfg.dim, cfg.mlp_mult_attn, gated=cfg.attn_mlp == "swiglu", hidden=cfg.mlp_hidden("a"))
 
     def forward(self, x, state=None, return_state: bool = False):
         if return_state:
@@ -70,6 +70,10 @@ class DeepaLM(nn.Module):
             self.lm_head = nn.Linear(cfg.dim, cfg.vocab_size, bias=False)
         self.gradient_checkpointing = False
         self.apply(self._init)
+        if cfg.scaled_init:  # residual-stream output projections: std / sqrt(2 * n_layers)  (GPT-2 / Megatron)
+            for name, p in self.named_parameters():
+                if name.endswith(("mix.out.weight", "mix.o.weight", "mlp.down.weight")):
+                    nn.init.normal_(p, std=cfg.init_std / (2 * cfg.n_layers) ** 0.5)
 
     def _init(self, m: nn.Module) -> None:
         if isinstance(m, (nn.Linear, nn.Embedding)):

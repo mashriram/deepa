@@ -59,3 +59,28 @@ def test_diffusers_model():
         m2 = DeepaSequenceModel.from_pretrained(d).eval()
         with torch.no_grad():
             assert torch.equal(m2(ids).last_hidden_state, h)
+
+
+def test_hf_any_size_with_gqa_and_bpe_vocab():
+    import deepa.integrations.hf as H
+    from transformers import AutoModelForCausalLM
+    cfg = H.DeepaHFConfig.build(128, 4, attn_every=2, head_dim=32, gqa_groups=2, vocab_size=1000)
+    assert cfg.num_key_value_heads == 2 and cfg.vocab_size == 1000
+    m = AutoModelForCausalLM.from_config(cfg).eval()
+    ids = torch.randint(0, 1000, (1, 9))
+    with torch.no_grad():
+        gen = m.generate(ids, max_new_tokens=5, do_sample=False)
+        ref = ids
+        for _ in range(5):
+            ref = torch.cat([ref, m(ref).logits[:, -1].argmax(-1, keepdim=True)], 1)
+    assert torch.equal(gen, ref)
+    assert m.num_parameters() == cfg.to_deepa().num_parameters()
+
+
+def test_diffusers_from_deepa_config():
+    pytest.importorskip("diffusers")
+    from deepa import DeepaConfig
+    from deepa.integrations.diffusers import DeepaSequenceModel
+    cfg = DeepaConfig.build(128, 4, attn_every=2, head_dim=32, vocab_size=500)
+    m = DeepaSequenceModel.from_deepa_config(cfg)
+    assert sum(p.numel() for p in m.parameters()) == cfg.num_parameters()
