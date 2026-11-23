@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "deepa-lm"
+version = "0.1.0"
+description = "DEEPA: hybrid gated-delta-rule / ALiBi-attention language models with constant-size recurrent state"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+dependencies = ["torch>=2.2", "safetensors>=0.4"]
+
+[project.optional-dependencies]
+fast = ["flash-linear-attention>=0.2", "triton>=3.0"]   # Triton gated-delta-rule kernels (CUDA)
+hf = ["transformers>=4.45"]
+diffusers = ["diffusers>=0.30"]
+dev = ["pytest>=8", "transformers>=4.45", "diffusers>=0.30"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/deepa"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
