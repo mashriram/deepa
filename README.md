@@ -70,6 +70,7 @@ ones. That rule lets the model read texts far longer than it was trained on.
 ## Install
 
 ```bash
+pip install deepa-lm               # from PyPI (once released); or, from a clone:
 pip install -e .                    # core: PyTorch only (runs on CPU or GPU)
 pip install -e ".[fast]"            # + Triton gated-delta-rule kernels (CUDA): the fast training path
 pip install -e ".[hf]"              # + Hugging Face transformers integration

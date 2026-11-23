@@ -9,7 +9,20 @@ description = "DEEPA: hybrid gated-delta-rule / ALiBi-attention language models 
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
+authors = [{ name = "Deepa" }, { name = "J. V. K. Hem" }, { name = "M. A. Shriram" }]
+keywords = ["language-model", "linear-attention", "delta-rule", "alibi", "pytorch", "transformers", "state-space"]
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Framework :: Hugging Face Transformers",
+]
 dependencies = ["torch>=2.2", "safetensors>=0.4"]
+
+[project.urls]
+Homepage = "https://github.com/mashriram/deepa"
+Repository = "https://github.com/mashriram/deepa"
+Issues = "https://github.com/mashriram/deepa/issues"
 
 [project.optional-dependencies]
 fast = ["flash-linear-attention>=0.2", "triton>=3.0"]   # Triton gated-delta-rule kernels (CUDA)
